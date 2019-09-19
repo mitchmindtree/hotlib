@@ -143,6 +143,13 @@ impl Watch {
         }
         Ok(None)
     }
+
+    /// Manually invoke a build of the watched library.
+    ///
+    /// This is useful for retrieving an initial build during model initialisation.
+    pub fn build(&self) -> Result<libloading::Library, NextError> {
+        build_and_load(self)
+    }
 }
 
 // Whether or not the given event should trigger a rebuild.
