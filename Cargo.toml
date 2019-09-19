@@ -1,0 +1,13 @@
+[package]
+name = "hotlib"
+version = "0.1.0"
+authors = ["mitchmindtree <mitchell.nordine@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+cargo = "0.38"
+crossbeam-channel = "0.3"
+derive_more = "0.15"
+failure = "0.1.5"
+libloading = "0.5"
+notify = "5.0.0-pre.1"

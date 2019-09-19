@@ -1,0 +1,10 @@
+[package]
+name = "test_crate"
+version = "0.1.0"
+authors = ["mitchmindtree <mitchell.nordine@gmail.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["lib", "dylib"]
+name = "test_crate"
+path = "src/lib.rs"
