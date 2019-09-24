@@ -84,16 +84,17 @@ pub fn watch(path: &Path) -> Result<Watch, WatchError> {
     let source_id = cargo::core::SourceId::for_path(path)?;
     let (cargo_package, _) = cargo::ops::read_package(path, source_id, &cargo_config)?;
     let target = package_dylib_target(&cargo_package).ok_or(WatchError::NoDylibTarget)?;
-    let src_path = target.src_path().path().ok_or(WatchError::NoDylibTarget)?;
+    let src_root_path = target.src_path().path().ok_or(WatchError::NoDylibTarget)?;
+    let src_dir_path = src_root_path.parent().expect("src root has no parent directory");
 
     // Begin watching the src path.
     let (tx, event_rx) = crossbeam_channel::unbounded();
     let mut watcher = notify::RecommendedWatcher::new_immediate(tx)?;
-    watcher.watch(src_path, notify::RecursiveMode::Recursive)?;
+    watcher.watch(src_dir_path, notify::RecursiveMode::Recursive)?;
 
     // Collect the paths.
     let cargo_toml_path = path.to_path_buf();
-    let src_path = src_path.to_path_buf();
+    let src_path = src_dir_path.to_path_buf();
 
     Ok(Watch {
         cargo_config,
@@ -179,20 +180,16 @@ fn build_and_load(watch: &Watch) -> Result<libloading::Library, NextError> {
     // Compile the package.
     let options = compile_options(cargo_config).map_err(|err| NextError::Cargo { err })?;
     let pkg_manifest_path = cargo_package.manifest_path();
-    println!("pre workspace");
     let pkg_workspace = cargo::core::Workspace::new(&pkg_manifest_path, &cargo_config)
         .map_err(|err| NextError::Cargo { err })?;
-    println!("pre compilation");
     let compilation = cargo::ops::compile(&pkg_workspace, &options)
         .map_err(|err| NextError::CompilationFailed { err })?;
 
     // Locate the generated binary.
     let file_stem = format!("lib{}", dylib_target.name());
     let dylib_path = compilation.root_output.join(file_stem).with_extension(dylib_ext());
-    println!("dylib path: {:?}", dylib_path);
 
     // Load the library and return it.
-    println!("pre library load");
     let lib = libloading::Library::new(&dylib_path)?;
     Ok(lib)
 }
