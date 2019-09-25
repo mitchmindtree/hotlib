@@ -19,16 +19,17 @@ pub struct Watch {
     event_rx: crossbeam_channel::Receiver<notify::RawEvent>,
 }
 
+#[derive(Clone)]
 struct PackageInfo {
-    cargo_config: cargo::Config,
-    cargo_package: cargo::core::Package,
     cargo_toml_path: PathBuf,
     src_path: PathBuf,
 }
 
 /// The information required to build the package's dylib target.
-pub struct Package<'a> {
-    info: &'a PackageInfo,
+pub struct Package {
+    cargo_config: cargo::Config,
+    cargo_package: cargo::core::Package,
+    info: PackageInfo,
 }
 
 /// The result of building a package's dynamic library.
@@ -92,6 +93,17 @@ pub enum BuildError {
     }
 }
 
+/// Errors that might occur when retrieving the package for the lib at the originally specified
+/// Cargo.toml.
+#[derive(Debug, Fail, From)]
+pub enum PackageError {
+    #[fail(display = "an error occurred within cargo attempting to read the package: {}", err)]
+    Cargo {
+        #[fail(cause)]
+        err: failure::Error,
+    }
+}
+
 /// Errors that might occur while waiting for the next library instance.
 #[derive(Debug, Fail, From)]
 pub enum NextError {
@@ -102,6 +114,11 @@ pub enum NextError {
         #[fail(cause)]
         err: notify::Error,
     },
+    #[fail(display = "failed to read the cargo package for the lib: {}", err)]
+    Package {
+        #[fail(cause)]
+        err: PackageError,
+    }
 }
 
 /// Errors that might occur while loading a built library.
@@ -152,8 +169,6 @@ pub fn watch(path: &Path) -> Result<Watch, WatchError> {
 
     // Collect the package info.
     let package_info = PackageInfo {
-        cargo_config,
-        cargo_package,
         cargo_toml_path,
         src_path,
     };
@@ -184,7 +199,7 @@ impl Watch {
                 Ok(event) => event,
             };
             if check_raw_event(event)? {
-                return Ok(self.package());
+                return Ok(self.package()?);
             }
         }
     }
@@ -193,7 +208,7 @@ impl Watch {
     pub fn try_next(&self) -> Result<Option<Package>, NextError> {
         for event in self.event_rx.try_iter() {
             if check_raw_event(event)? {
-                return Ok(Some(self.package()));
+                return Ok(Some(self.package()?));
             }
         }
         Ok(None)
@@ -202,13 +217,21 @@ impl Watch {
     /// Manually retrieve the library's package immediately without checking for file events.
     ///
     /// This is useful for triggering an initial build during model initialisation.
-    pub fn package(&self) -> Package {
-        let info = &self.package_info;
-        Package { info }
+    pub fn package(&self) -> Result<Package, PackageError> {
+        let path = self.cargo_toml_path();
+        let cargo_config = cargo::Config::default()?;
+        let source_id = cargo::core::SourceId::for_path(path)?;
+        let (cargo_package, _) = cargo::ops::read_package(
+            path,
+            source_id,
+            &cargo_config,
+        )?;
+        let info = self.package_info.clone();
+        Ok(Package { cargo_config, cargo_package, info })
     }
 }
 
-impl<'a> Package<'a> {
+impl Package {
     /// The path to the package's `Cargo.toml`.
     pub fn cargo_toml_path(&self) -> &Path {
         &self.info.cargo_toml_path
@@ -220,12 +243,12 @@ impl<'a> Package<'a> {
     }
 
     /// Builds the package's dynamic library target.
-    pub fn build(&self) -> Result<Build<'a>, BuildError> {
-        let PackageInfo {
+    pub fn build(&self) -> Result<Build, BuildError> {
+        let Package {
             ref cargo_package,
             ref cargo_config,
             ..
-        } = self.info;
+        } = *self;
 
         // Check there's a dylib target.
         let target = package_dylib_target(cargo_package).ok_or(BuildError::NoDylibTarget)?;

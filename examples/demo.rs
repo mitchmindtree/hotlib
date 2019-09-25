@@ -4,7 +4,7 @@ fn main() {
         .join("Cargo.toml");
     println!("Begin watching for changes to {:?}", test_crate_path);
     let watch = hotlib::watch(&test_crate_path).unwrap();
-    let mut lib = watch.package().build().unwrap().load().unwrap();
+    let mut lib = watch.package().unwrap().build().unwrap().load().unwrap();
     loop {
         unsafe {
             let foo: libloading::Symbol<fn(i32, i32) -> i32> = lib.get(b"foo").unwrap();
