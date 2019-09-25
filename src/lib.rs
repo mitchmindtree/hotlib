@@ -5,6 +5,7 @@
 use derive_more::From;
 use failure::Fail;
 use notify::Watcher as NotifyWatcher;
+use slug::slugify;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
@@ -302,7 +303,8 @@ impl<'a> Build<'a> {
     // Produce the file stem for the temporary dynamic library clone that will be created upon
     // `load`.
     fn tmp_file_stem(&self) -> String {
-        format!("{}-{}", self.file_stem(), humantime::format_rfc3339(self.timestamp))
+        let timestamp_slug = slugify(format!("{}", humantime::format_rfc3339(self.timestamp)));
+        format!("{}-{}", self.file_stem(), timestamp_slug)
     }
 }
 
