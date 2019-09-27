@@ -297,7 +297,16 @@ impl<'a> Build<'a> {
 
     // The file stem of the built dynamic library.
     fn file_stem(&self) -> String {
-        format!("lib{}", self.target.name())
+        // TODO: On windows, the generated lib does not contain the "lib" prefix.
+        // A proper solution would likely involve retrieving the file stem from cargo itself.
+        #[cfg(target_os = "windows")]
+        {
+            format!("{}", self.target.name())
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            format!("lib{}", self.target.name())
+        }
     }
 
     // Produce the file stem for the temporary dynamic library clone that will be created upon
