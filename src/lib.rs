@@ -177,7 +177,7 @@ pub fn watch(path: &Path) -> Result<Watch, WatchError> {
     let json: serde_json::Value = serde_json::from_slice(&output.stdout)?;
 
     // A function to read paths and name out of JSON.
-    fn read_json(json: &serde_json::Value) -> Option<(PathBuf, PathBuf, String)> {
+    let read_json = |json: &serde_json::Value| -> Option<(PathBuf, PathBuf, String)> {
         let obj = json.as_object()?;
 
         // Retrieve the target directory.
@@ -186,7 +186,15 @@ pub fn watch(path: &Path) -> Result<Watch, WatchError> {
 
         // Retrieve the first package as an object.
         let pkgs = obj.get("packages")?.as_array()?;
-        let pkg = pkgs.get(0)?.as_object()?;
+
+        // Find the package with the matching manifest.
+        let pkg = pkgs.iter().find_map(|pkg| {
+            let s = pkg.get("manifest_path")?.as_str()?;
+            match s == manifest_path_str {
+                true => Some(pkg),
+                false => None,
+            }
+        })?;
 
         // Search the targets for one containing a dylib output.
         let targets = pkg.get("targets")?.as_array()?;
@@ -205,7 +213,7 @@ pub fn watch(path: &Path) -> Result<Watch, WatchError> {
         let src_root_path = Path::new(src_root_str).to_path_buf();
 
         Some((target_dir_path, src_root_path, lib_name))
-    }
+    };
 
     let (target_dir_path, src_root_path, lib_name) = read_json(&json)
         .ok_or(WatchError::NoDylibTarget)?;
