@@ -127,7 +127,7 @@ pub enum LoadError {
     #[fail(display = "failed to load library with libloading: {}", err)]
     Library {
         #[fail(cause)]
-        err: std::io::Error,
+        err: libloading::Error,
     },
 }
 
@@ -380,7 +380,7 @@ impl<'a> Build<'a> {
     ///
     /// Note that if you do this, you will have to ensure the returned `Library` is dropped before
     /// attempting to re-build the library.
-    pub fn load_in_place(self) -> libloading::Result<libloading::Library> {
+    pub fn load_in_place(self) -> Result<libloading::Library, libloading::Error> {
         let dylib_path = self.dylib_path();
         libloading::Library::new(dylib_path)
     }
