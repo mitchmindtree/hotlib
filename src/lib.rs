@@ -360,6 +360,17 @@ impl<'a> Build<'a> {
         // If the library already exists, load it.
         loop {
             if tmp_path.exists() {
+                // This is some voodoo to enable reloading of dylib on mac os
+                if cfg!(target_os = "macos") { 
+                    std::process::Command::new("install_name_tool")
+                        .current_dir(tmp_path.parent().unwrap())
+                        .arg("-id")
+                        .arg("''")
+                        .arg(tmp_path.file_name().unwrap())
+                        .output()
+                        .expect("ls command failed to start");
+                }
+
                 let lib = libloading::Library::new(&tmp_path)
                     .map(Some)
                     .map_err(|err| LoadError::Library { err })?;
@@ -368,7 +379,6 @@ impl<'a> Build<'a> {
                 let tmp = TempLibrary { build_timestamp, path, lib };
                 return Ok(tmp);
             }
-
             // Copy the dylib to the tmp location.
             let tmp_dir = tmp_path.parent().expect("temp dylib path has no parent");
             std::fs::create_dir_all(tmp_dir).map_err(|err| LoadError::Io { err })?;
