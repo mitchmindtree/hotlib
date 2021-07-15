@@ -364,7 +364,13 @@ impl<'a> Build<'a> {
     /// Copy the library to the platform's temporary directory and load it from there.
     ///
     /// Note that the copied dynamic library will be removed on `Drop`.
-    pub fn load(self) -> Result<TempLibrary, LoadError> {
+    ///
+    /// # Safety
+    ///
+    /// Loading dynamic libraries unfortunately appears to be inherently unsafe. See [this
+    /// note](https://docs.rs/libloading/0.7.0/libloading/changelog/r0_7_0/index.html#loading-functions-are-now-unsafe)
+    /// in the `libloading` documentation for an explanation.
+    pub unsafe fn load(self) -> Result<TempLibrary, LoadError> {
         let dylib_path = self.dylib_path();
         let tmp_path = self.tmp_dylib_path();
         let tmp_dir = tmp_path.parent().expect("temp dylib path has no parent");
@@ -409,7 +415,7 @@ impl<'a> Build<'a> {
     ///
     /// Note that if you do this, you will have to ensure the returned `Library` is dropped before
     /// attempting to re-build the library.
-    pub fn load_in_place(self) -> Result<libloading::Library, libloading::Error> {
+    pub unsafe fn load_in_place(self) -> Result<libloading::Library, libloading::Error> {
         let dylib_path = self.dylib_path();
         libloading::Library::new(dylib_path)
     }
