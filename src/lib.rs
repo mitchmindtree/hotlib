@@ -5,6 +5,7 @@
 use notify::Watcher as NotifyWatcher;
 use slug::slugify;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
 use std::time::SystemTime;
 use thiserror::Error;
 
@@ -15,7 +16,7 @@ pub use libloading::{self, Library, Symbol};
 pub struct Watch {
     package_info: PackageInfo,
     _watcher: notify::RecommendedWatcher,
-    event_rx: crossbeam_channel::Receiver<notify::RawEvent>,
+    event_rx: mpsc::Receiver<notify::Result<notify::Event>>,
 }
 
 struct PackageInfo {
@@ -221,8 +222,10 @@ pub fn watch(path: &Path) -> Result<Watch, WatchError> {
         .expect("src root has no parent directory");
 
     // Begin watching the src path.
-    let (tx, event_rx) = crossbeam_channel::unbounded();
-    let mut watcher = notify::RecommendedWatcher::new_immediate(tx)?;
+    let (tx, event_rx) = mpsc::channel();
+    let mut watcher = notify::RecommendedWatcher::new_immediate(move |ev| {
+        tx.send(ev).ok();
+    })?;
     watcher.watch(src_dir_path, notify::RecursiveMode::Recursive)?;
 
     // Collect the paths.
@@ -258,24 +261,21 @@ impl Watch {
     /// Wait for the library to be re-built after some change.
     pub fn next(&self) -> Result<Package, NextError> {
         loop {
-            let event = match self.event_rx.recv() {
+            let _event = match self.event_rx.recv() {
                 Err(_) => return Err(NextError::ChannelClosed),
                 Ok(event) => event,
             };
-            if check_raw_event(event)? {
-                return Ok(self.package());
-            }
+            return Ok(self.package());
         }
     }
 
     /// The same as `next`, but returns early if there are no pending events.
     pub fn try_next(&self) -> Result<Option<Package>, NextError> {
-        for event in self.event_rx.try_iter() {
-            if check_raw_event(event)? {
-                return Ok(Some(self.package()));
-            }
+        match self.event_rx.try_recv() {
+            Ok(_event) => return Ok(Some(self.package())),
+            Err(mpsc::TryRecvError::Disconnected) => Err(NextError::ChannelClosed),
+            Err(mpsc::TryRecvError::Empty) => Ok(None),
         }
-        Ok(None)
     }
 
     /// Manually retrieve the library's package immediately without checking for file events.
@@ -480,19 +480,6 @@ impl Drop for TempLibrary {
 // The temporary directory used by hotlib.
 fn tmp_dir() -> PathBuf {
     std::env::temp_dir().join("hotlib")
-}
-
-// Whether or not the given event should trigger a rebuild.
-fn _check_event(_event: notify::Event) -> bool {
-    true
-}
-
-// Whether or not the given event should trigger a rebuild.
-fn check_raw_event(event: notify::RawEvent) -> Result<bool, NextError> {
-    use notify::Op;
-    Ok(event.op?.intersects(
-        Op::CREATE | Op::REMOVE | Op::WRITE | Op::CLOSE_WRITE | Op::RENAME | Op::METADATA,
-    ))
 }
 
 // Get the dylib extension for this platform.

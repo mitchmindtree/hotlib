@@ -1,6 +1,6 @@
 [package]
 name = "hotlib"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["mitchmindtree <mitchell.nordine@gmail.com>"]
 description = "A library for watching, dynamically compiling, and hot-loading Rust libraries."
 keywords = ["hotload", "crate", "lib", "dylib", "compile"]
@@ -11,10 +11,9 @@ homepage = "https://github.com/mitchmindtree/hotlib"
 edition = "2018"
 
 [dependencies]
-crossbeam-channel = "0.3"
-humantime = "1.3"
+humantime = "2"
 libloading = "0.7.0"
-notify = "=5.0.0-pre.1"
+notify = "=5.0.0-pre.10"
 serde_json = "1"
 slug = "0.1"
 thiserror = "1"
