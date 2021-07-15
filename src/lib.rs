@@ -2,12 +2,11 @@
 //!
 //! You are likely looking for the [watch function docs](./fn.watch.html).
 
-use derive_more::From;
-use failure::Fail;
 use notify::Watcher as NotifyWatcher;
 use slug::slugify;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
+use thiserror::Error;
 
 #[doc(inline)]
 pub use libloading::{self, Library, Symbol};
@@ -15,7 +14,7 @@ pub use libloading::{self, Library, Symbol};
 /// Watches and re-builds the library upon changes to its source code.
 pub struct Watch {
     package_info: PackageInfo,
-    watcher: notify::RecommendedWatcher,
+    _watcher: notify::RecommendedWatcher,
     event_rx: crossbeam_channel::Receiver<notify::RawEvent>,
 }
 
@@ -53,80 +52,80 @@ pub struct TempLibrary {
 }
 
 /// Errors that might occur within the `watch` function.
-#[derive(Debug, Fail, From)]
+#[derive(Debug, Error)]
 pub enum WatchError {
-    #[fail(display = "invalid path: expected path to end with `Cargo.toml`")]
+    #[error("invalid path: expected path to end with `Cargo.toml`")]
     InvalidPath,
-    #[fail(display = "an IO error occurred while attempting to invoke `cargo metadata`: {}", err)]
+    #[error("an IO error occurred while attempting to invoke `cargo metadata`: {err}")]
     Io {
-        #[fail(cause)]
+        #[from]
         err: std::io::Error,
     },
-    #[fail(display = "{}", err)]
+    #[error("{err}")]
     ExitStatusUnsuccessful {
-        #[fail(cause)]
+        #[from]
         err: ExitStatusUnsuccessfulError,
     },
-    #[fail(display = "an error occurred when attempting to read cargo stdout as json: {}", err)]
+    #[error("an error occurred when attempting to read cargo stdout as json: {err}")]
     Json {
-        #[fail(cause)]
+        #[from]
         err: serde_json::Error,
     },
-    #[fail(display = "no dylib targets were found within the given cargo package")]
+    #[error("no dylib targets were found within the given cargo package")]
     NoDylibTarget,
-    #[fail(display = "failed to construct `notify::RecommendedWatcher`: {}", err)]
+    #[error("failed to construct `notify::RecommendedWatcher`: {err}")]
     Notify {
-        #[fail(cause)]
+        #[from]
         err: notify::Error,
     },
 }
 
 /// Errors that might occur while building a library instance.
-#[derive(Debug, Fail, From)]
+#[derive(Debug, Error)]
 pub enum BuildError {
-    #[fail(display = "an IO error occurred while attempting to invoke cargo: {}", err)]
+    #[error("an IO error occurred while attempting to invoke cargo: {err}")]
     Io {
-        #[fail(cause)]
+        #[from]
         err: std::io::Error,
     },
-    #[fail(display = "{}", err)]
+    #[error("{err}")]
     ExitStatusUnsuccessful {
-        #[fail(cause)]
+        #[from]
         err: ExitStatusUnsuccessfulError,
     },
 }
 
 /// A process' output indicates unsuccessful completion.
-#[derive(Debug, Fail)]
-#[fail(display = "cargo process exited unsuccessfully with status code: {:?}: {}", code, stderr)]
+#[derive(Debug, Error)]
+#[error("cargo process exited unsuccessfully with status code: {code:?}: {stderr}")]
 pub struct ExitStatusUnsuccessfulError {
     pub code: Option<i32>,
     pub stderr: String,
 }
 
 /// Errors that might occur while waiting for the next library instance.
-#[derive(Debug, Fail, From)]
+#[derive(Debug, Error)]
 pub enum NextError {
-    #[fail(display = "the channel used to receive file system events was closed")]
+    #[error("the channel used to receive file system events was closed")]
     ChannelClosed,
-    #[fail(display = "a notify event signalled an error: {}", err)]
+    #[error("a notify event signalled an error: {err}")]
     Notify {
-        #[fail(cause)]
+        #[from]
         err: notify::Error,
     },
 }
 
 /// Errors that might occur while loading a built library.
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub enum LoadError {
-    #[fail(display = "an IO error occurred: {}", err)]
+    #[error("an IO error occurred: {err}")]
     Io {
-        #[fail(cause)]
+        #[from]
         err: std::io::Error,
     },
-    #[fail(display = "failed to load library with libloading: {}", err)]
+    #[error("failed to load library with libloading: {err}")]
     Library {
-        #[fail(cause)]
+        #[from]
         err: libloading::Error,
     },
 }
@@ -238,7 +237,7 @@ pub fn watch(path: &Path) -> Result<Watch, WatchError> {
 
     Ok(Watch {
         package_info,
-        watcher,
+        _watcher: watcher,
         event_rx,
     })
 }
@@ -306,6 +305,7 @@ impl<'a> Package<'a> {
             ..
         } = self.info;
 
+
         // Tell cargo to compile the package.
         let manifest_path_str = format!("{}", manifest_path.display());
         let output = std::process::Command::new("cargo")
@@ -362,7 +362,7 @@ impl<'a> Build<'a> {
         loop {
             if tmp_path.exists() {
                 // This is some voodoo to enable reloading of dylib on mac os
-                if cfg!(target_os = "macos") { 
+                if cfg!(target_os = "macos") {
                     std::process::Command::new("install_name_tool")
                         .current_dir(tmp_dir)
                         .arg("-id")
