@@ -214,9 +214,11 @@ pub fn watch(path: &Path) -> Result<Watch, WatchError> {
         Some((target_dir_path, src_root_path, lib_name))
     };
 
-    let (target_dir_path, src_root_path, lib_name) = read_json(&json)
-        .ok_or(WatchError::NoDylibTarget)?;
-    let src_dir_path = src_root_path.parent().expect("src root has no parent directory");
+    let (target_dir_path, src_root_path, lib_name) =
+        read_json(&json).ok_or(WatchError::NoDylibTarget)?;
+    let src_dir_path = src_root_path
+        .parent()
+        .expect("src root has no parent directory");
 
     // Begin watching the src path.
     let (tx, event_rx) = crossbeam_channel::unbounded();
@@ -305,7 +307,6 @@ impl<'a> Package<'a> {
             ..
         } = self.info;
 
-
         // Tell cargo to compile the package.
         let manifest_path_str = format!("{}", manifest_path.display());
         let output = std::process::Command::new("cargo")
@@ -324,7 +325,12 @@ impl<'a> Package<'a> {
         // Time stamp the moment of build completion.
         let timestamp = SystemTime::now();
 
-        Ok(Build { timestamp, output, lib_name, target_dir_path })
+        Ok(Build {
+            timestamp,
+            output,
+            lib_name,
+            target_dir_path,
+        })
     }
 }
 
@@ -342,12 +348,17 @@ impl<'a> Build<'a> {
     /// The path to the generated dylib target.
     pub fn dylib_path(&self) -> PathBuf {
         let file_stem = self.file_stem();
-        self.target_dir_path.join("release").join(file_stem).with_extension(dylib_ext())
+        self.target_dir_path
+            .join("release")
+            .join(file_stem)
+            .with_extension(dylib_ext())
     }
 
     /// The path to the temporary dynamic library clone that will be created upon `load`.
     pub fn tmp_dylib_path(&self) -> PathBuf {
-        tmp_dir().join(self.tmp_file_stem()).with_extension(dylib_ext())
+        tmp_dir()
+            .join(self.tmp_file_stem())
+            .with_extension(dylib_ext())
     }
 
     /// Copy the library to the platform's temporary directory and load it from there.
@@ -367,7 +378,11 @@ impl<'a> Build<'a> {
                         .current_dir(tmp_dir)
                         .arg("-id")
                         .arg("''")
-                        .arg(tmp_path.file_name().expect("temp dylib path has no file name"))
+                        .arg(
+                            tmp_path
+                                .file_name()
+                                .expect("temp dylib path has no file name"),
+                        )
                         .output()
                         .expect("ls command failed to start");
                 }
@@ -377,7 +392,11 @@ impl<'a> Build<'a> {
                     .map_err(|err| LoadError::Library { err })?;
                 let path = tmp_path;
                 let build_timestamp = self.timestamp;
-                let tmp = TempLibrary { build_timestamp, path, lib };
+                let tmp = TempLibrary {
+                    build_timestamp,
+                    path,
+                    lib,
+                };
                 return Ok(tmp);
             }
             // Copy the dylib to the tmp location.
@@ -422,7 +441,9 @@ impl TempLibrary {
     ///
     /// This may also be accessed via the `Deref` implementation.
     pub fn lib(&self) -> &libloading::Library {
-        self.lib.as_ref().expect("lib should always be `Some` until `Drop`")
+        self.lib
+            .as_ref()
+            .expect("lib should always be `Some` until `Drop`")
     }
 
     /// The time at which the original library was built.
@@ -463,9 +484,9 @@ fn _check_event(_event: notify::Event) -> bool {
 // Whether or not the given event should trigger a rebuild.
 fn check_raw_event(event: notify::RawEvent) -> Result<bool, NextError> {
     use notify::Op;
-    Ok(event
-        .op?
-        .intersects(Op::CREATE | Op::REMOVE | Op::WRITE | Op::CLOSE_WRITE | Op::RENAME | Op::METADATA))
+    Ok(event.op?.intersects(
+        Op::CREATE | Op::REMOVE | Op::WRITE | Op::CLOSE_WRITE | Op::RENAME | Op::METADATA,
+    ))
 }
 
 // Get the dylib extension for this platform.
