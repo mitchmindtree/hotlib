@@ -11,7 +11,7 @@ homepage = "https://github.com/mitchmindtree/hotlib"
 edition = "2018"
 
 [dependencies]
-crossbeam-channel = "0.3"
+crossbeam-channel = "0.5.7"
 humantime = "2.1"
 libloading = "0.7.4"
 notify = "5.1.0"
