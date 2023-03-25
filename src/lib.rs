@@ -387,7 +387,7 @@ impl<'a> Build<'a> {
                         .expect("ls command failed to start");
                 }
 
-                let lib = libloading::Library::new(&tmp_path)
+                let lib = unsafe { libloading::Library::new(&tmp_path) }
                     .map(Some)
                     .map_err(|err| LoadError::Library { err })?;
                 let path = tmp_path;
@@ -411,7 +411,7 @@ impl<'a> Build<'a> {
     /// attempting to re-build the library.
     pub fn load_in_place(self) -> Result<libloading::Library, libloading::Error> {
         let dylib_path = self.dylib_path();
-        libloading::Library::new(dylib_path)
+        unsafe { libloading::Library::new(dylib_path) }
     }
 
     // The file stem of the built dynamic library.
