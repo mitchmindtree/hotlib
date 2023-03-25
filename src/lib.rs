@@ -15,7 +15,7 @@ pub use libloading::{self, Library, Symbol};
 pub struct Watch {
     package_info: PackageInfo,
     _watcher: notify::RecommendedWatcher,
-    event_rx: crossbeam_channel::Receiver<notify::RawEvent>,
+    event_rx: crossbeam_channel::Receiver<notify::Event>,
 }
 
 struct PackageInfo {
@@ -222,7 +222,14 @@ pub fn watch(path: &Path) -> Result<Watch, WatchError> {
 
     // Begin watching the src path.
     let (tx, event_rx) = crossbeam_channel::unbounded();
-    let mut watcher = notify::RecommendedWatcher::new_immediate(tx)?;
+    let mut watcher = notify::RecommendedWatcher::new(
+        move |res: Result<notify::Event, notify::Error>| {
+            if let Ok(event) = res {
+                tx.send(event).ok();
+            }
+        },
+        notify::Config::default(),
+    )?;
     watcher.watch(src_dir_path, notify::RecursiveMode::Recursive)?;
 
     // Collect the paths.
@@ -387,7 +394,7 @@ impl<'a> Build<'a> {
                         .expect("ls command failed to start");
                 }
 
-                let lib = libloading::Library::new(&tmp_path)
+                let lib = unsafe { libloading::Library::new(&tmp_path) }
                     .map(Some)
                     .map_err(|err| LoadError::Library { err })?;
                 let path = tmp_path;
@@ -411,7 +418,7 @@ impl<'a> Build<'a> {
     /// attempting to re-build the library.
     pub fn load_in_place(self) -> Result<libloading::Library, libloading::Error> {
         let dylib_path = self.dylib_path();
-        libloading::Library::new(dylib_path)
+        unsafe { libloading::Library::new(dylib_path) }
     }
 
     // The file stem of the built dynamic library.
@@ -482,10 +489,14 @@ fn _check_event(_event: notify::Event) -> bool {
 }
 
 // Whether or not the given event should trigger a rebuild.
-fn check_raw_event(event: notify::RawEvent) -> Result<bool, NextError> {
-    use notify::Op;
-    Ok(event.op?.intersects(
-        Op::CREATE | Op::REMOVE | Op::WRITE | Op::CLOSE_WRITE | Op::RENAME | Op::METADATA,
+fn check_raw_event(event: notify::Event) -> Result<bool, NextError> {
+    use notify::{event::ModifyKind, EventKind};
+    Ok(matches!(
+        event.kind,
+        EventKind::Create(_)
+            | EventKind::Remove(_)
+            | EventKind::Modify(ModifyKind::Data(_))
+            | EventKind::Modify(ModifyKind::Any)
     ))
 }
 
